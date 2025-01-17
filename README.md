@@ -1,0 +1,1 @@
+A simple tool that generates Git commit messages based on changes in your repository. It looks at the diffs, sends them to the GROQ API, and gives a commit message suggestion. Note that the suggestions might not always be accurate.
