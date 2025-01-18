@@ -2,11 +2,11 @@ use clap::{Arg, Command};
 use git2::{DiffOptions, Repository};
 use reqwest::Client;
 use serde_json::json;
-use std::process;
-use anyhow::{Context, Result};  
+use anyhow::{Context, Result};
+use std::env;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let matches = Command::new("git-commit-helper")
         .version("1.0")
         .about("Generate a commit message based on diffs in the working directory")
@@ -17,79 +17,86 @@ async fn main() {
         )
         .get_matches();
 
-    let directory = matches.get_one::<String>("directory").expect("directory is required");
+    let directory = matches
+        .get_one::<String>("directory")
+        .context("Directory argument is required")?;
 
-    let repo = match Repository::discover(directory) {
-        Ok(repo) => repo,
-        Err(e) => {
-            eprintln!("Error: Failed to open Git repository: {}", e);
-            process::exit(1);
-        }
-    };
+    let repo = Repository::discover(directory)
+        .context("Failed to open Git repository")?;
 
-    let diffs = match fetch_diffs(&repo) {
-        Ok(diffs) => diffs,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            process::exit(1);
-        }
-    };
+    let diffs = fetch_diffs(&repo)
+        .context("Failed to fetch diffs")?;
 
-    match send_to_groq(diffs).await {
-        Ok(response) => {
-            println!("Suggested commit message:\n{}", response);
-        }
-        Err(e) => {
-            eprintln!("Error: Failed to fetch response from GROQ API: {}", e);
-            process::exit(1);
-        }
-    }
+    let client = create_http_client();
+
+    let response = send_to_groq(&client, diffs)
+        .await
+        .context("Failed to fetch response from GROQ API")?;
+
+    println!("Suggested commit message:\n{}", response);
+
+    Ok(())
 }
 
-fn fetch_diffs(repo: &Repository) -> Result<String, git2::Error> {
+fn create_http_client() -> Client {
+    Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTP client")
+}
+
+fn fetch_diffs(repo: &Repository) -> Result<String> {
     let mut diff_options = DiffOptions::new();
     diff_options.ignore_whitespace_change(true);
 
-    let diff = repo.diff_index_to_workdir(None, Some(&mut diff_options))?;
+    let diff = repo
+        .diff_index_to_workdir(None, Some(&mut diff_options))
+        .context("Failed to generate diff")?;
 
     let mut diff_text = String::new();
     diff.print(git2::DiffFormat::Patch, |_, _, line| {
         diff_text.push_str(std::str::from_utf8(line.content()).unwrap_or("(unreadable diff)"));
         true
-    })?;
+    })
+    .context("Failed to process diff output")?;
 
     if diff_text.is_empty() {
-        return Err(git2::Error::from_str(
-            "No changes found in the working directory.",
-        ));
+        anyhow::bail!("No changes found in the working directory");
     }
 
     Ok(diff_text)
 }
 
-async fn send_to_groq(diffs: String) -> Result<String> {
+async fn send_to_groq(client: &Client, diffs: String) -> Result<String> {
     let groq_api_url = "https://api.groq.com/openai/v1/chat/completions";
-    let groq_api_key = ""; // hard coded for now will use an env variable later
 
-    let payload = json!({
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are an AI coding assistant helping generate a concise and accurate Git commit message based solely on code diffs. Focus on meaningful changes in code, such as the removal of dependencies, changes to logic or imports, and modifications to function signatures. Do not mention updates to dependency versions unless they are part of the changes, and avoid including formatting or whitespace changes."
-            },
-            {
-                "role": "user",
-                "content": format!("Here are the changes in the code:\n{}", diffs)
-            }
-        ],
-        "model": "llama-3.3-70b-versatile",
-        "temperature": 1.0,
-        "max_completion_tokens": 256,
-        "top_p": 1,
-        "stream": false
-    });       
+    let groq_api_key = env::var("GROQ_API_KEY")
+        .context("Missing GROQ_API_KEY environment variable")?;
 
-    let client = Client::new();
+        let payload = json!({
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are an AI coding assistant tasked with generating a concise and accurate Git commit message based solely on code diffs. The output should be structured with a title and a detailed body: \n\n\
+        1. **Title**: A single-line summary that briefly describes the main purpose of the changes. Prefix the title with a conventional commit type (e.g., `fix`, `feat`, `refactor`, `docs`, etc.), followed by a concise description. \
+        Use parentheses to indicate the area of the codebase affected (e.g., `fix(main)` or `refactor(cli)`).\n\n\
+        2. **Body**: A detailed bullet-point list explaining each meaningful change. Use imperative verbs (e.g., 'remove', 'add', 'improve') to describe what was changed and why. \
+        Include only meaningful changes (e.g., logic updates, dependency removals, refactoring) and omit irrelevant details (e.g., formatting or whitespace changes).\n\n\
+        Do not speculate or include information that is not directly supported by the diffs. If dependencies are removed, note the removal. If imports are updated, specify them. Ensure the commit message is as accurate as possible, with no fabricated details."
+                },
+                {
+                    "role": "user",
+                    "content": format!("Here are the changes in the code:\n{}", diffs)
+                }
+            ],
+            "model": "llama-3.3-70b-versatile",
+            "temperature": 0.7,
+            "max_completion_tokens": 256,
+            "top_p": 1,
+            "stream": false
+        });
+        
+
     let response = client
         .post(groq_api_url)
         .header("Content-Type", "application/json")
@@ -99,11 +106,14 @@ async fn send_to_groq(diffs: String) -> Result<String> {
         .await
         .context("Failed to send request to GROQ API")?;
 
-    let json_response: serde_json::Value = response.json().await.context("Failed to parse response JSON")?;
+    let json_response: serde_json::Value = response
+        .json()
+        .await
+        .context("Failed to parse response JSON")?;
 
     if let Some(commit_message) = json_response["choices"][0]["message"]["content"].as_str() {
         Ok(commit_message.trim().to_string())
     } else {
-        Err(anyhow::anyhow!("Failed to extract commit message from the response").into())
+        Err(anyhow::anyhow!("Failed to extract commit message from the response"))
     }
 }
