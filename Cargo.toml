@@ -1,13 +1,23 @@
 [package]
 name = "git-changes-rs"
-version = "0.1.0"
+version = "0.14.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.2.0", features = ["derive"] }
-git2 = "0.16.1"
-regex = "1.9.1"
-tokio = { version = "1.32", features = ["full"] }
-reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
-serde_json = "1.0"
-anyhow = "1.0"
+clap = { version = "4.5.36", features = ["derive"] }
+git2 = "0.20.1"
+tokio = { version = "1.44.2", features = ["full"] }
+reqwest = { version = "0.12.15", features = ["json", "rustls-tls"] }
+serde_json = "1.0.140"
+anyhow = "1.0.98"
+serde = { version = "1.0.219", features = ["derive"] }
+dotenvy = "0.15.7"
+glob = "0.3.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = 'abort'
+strip = true
+debug = false
