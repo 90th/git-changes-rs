@@ -8,7 +8,6 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
 use std::env;
-use std::ffi::OsStr;
 use std::path::Path;
 
 #[derive(Deserialize, Debug)]
