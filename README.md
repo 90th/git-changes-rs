@@ -23,7 +23,7 @@ This version uses the Gemini API, which generally provides more accurate and rel
     ```bash
     cargo build --release
     ```
-    The executable will be located at `./target/release/git-changes-gemini`.
+    The executable will be located at `./target/release/git-changes-rs`.
 3.  **Set API Key:**
     You need a Google Gemini API key. Set it as an environment variable:
     ```bash
@@ -39,26 +39,26 @@ This version uses the Gemini API, which generally provides more accurate and rel
 Run the tool from your terminal, pointing it to the Git repository you want to analyze:
 
 ```bash
-./target/release/git-changes-gemini /path/to/your/repo [OPTIONS]
+./target/release/git-changes-rs /path/to/your/repo [OPTIONS]
 ```
 
 **Examples:**
 
 * **Analyze current directory:**
     ```bash
-    ./target/release/git-changes-gemini .
+    ./target/release/git-changes-rs .
     ```
 * **Exclude log files and temp files:**
     ```bash
     # Using multiple arguments
-    ./target/release/git-changes-gemini . --exclude "*.log" --exclude "*.tmp"
+    ./target/release/git-changes-rs . --exclude "*.log" --exclude "*.tmp"
 
     # Using comma-separated list
-    ./target/release/git-changes-gemini . --exclude "*.log,*.tmp"
+    ./target/release/git-changes-rs . --exclude "*.log,*.tmp"
     ```
 * **Exclude a directory:**
     ```bash
-    ./target/release/git-changes-gemini . -e "dist/**"
+    ./target/release/git-changes-rs . -e "dist/**"
     ```
 
 The tool will print the suggested commit message to the console.
