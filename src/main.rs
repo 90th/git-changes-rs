@@ -18,21 +18,17 @@ struct GeminiResponse {
 #[derive(Deserialize, Debug)]
 struct Candidate {
     content: Option<Content>,
-    // unused fields removed
 }
 
 #[derive(Deserialize, Debug)]
 struct Content {
     parts: Option<Vec<Part>>,
-    // unused fields removed
 }
 
 #[derive(Deserialize, Debug)]
 struct Part {
     text: Option<String>,
 }
-
-// safetyrating struct removed as it's no longer used by candidate
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -53,7 +49,7 @@ async fn main() -> Result<()> {
                 .long("exclude")
                 .help("Glob patterns to exclude (e.g., '*.log', 'target/**'). Use commas or multiple args.")
                 .action(ArgAction::Append)
-                .value_delimiter(',') // allow comma-separated values
+                .value_delimiter(',') 
                 .value_name("PATTERNS"),
         )
         .get_matches();
@@ -79,7 +75,7 @@ async fn main() -> Result<()> {
     }
 
     println!(
-        ">>> main: final filtered diffs found (len={})", // removed diff content print for brevity
+        ">>> main: final filtered diffs found (len={})", 
         diffs.len()
     );
 
@@ -110,20 +106,18 @@ fn is_excluded(delta: &DiffDelta, excludes: &[String]) -> bool {
                 match Pattern::new(pattern_str) {
                     Ok(pattern) => pattern.matches_path(p),
                     Err(e) => {
-                        // warn if pattern is invalid but continue checking others
                         eprintln!("warning: invalid exclude pattern '{}': {}", pattern_str, e);
                         false
                     }
                 }
             }),
-            None => false, // if path doesn't exist, it can't match
+            None => false, 
         }
     };
 
     let old_path = delta.old_file().path();
     let new_path = delta.new_file().path();
 
-    // if either the old path or new path matches an exclude pattern, exclude the delta
     check_path(old_path) || check_path(new_path)
 }
 
